@@ -26,6 +26,7 @@ backend/vector_index/index_store/
 # ── Node / Frontend ──────────────────────────────────────────────────────────
 node_modules/
 frontend/dist/
+frontend/.env
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
