@@ -11,18 +11,21 @@ Why a singleton?
 Usage:
     from backend.face_engine.model_loader import get_face_analysis_model
     model = get_face_analysis_model()   # returns cached instance
+
+Note: insightface is imported lazily (inside _load_model) so this module can
+be safely imported in test environments where insightface is not installed,
+as long as get_face_analysis_model() itself is mocked.
 """
 
-import insightface
-from insightface.app import FaceAnalysis
+from typing import Any
 
 from backend.config import INSIGHTFACE_MODEL_NAME
 from backend.face_engine.exceptions import ModelNotLoadedError
 
-_model_instance: FaceAnalysis | None = None
+_model_instance: Any = None
 
 
-def get_face_analysis_model() -> FaceAnalysis:
+def get_face_analysis_model() -> Any:
     """
     Returns the global FaceAnalysis model, loading it on first call.
 
@@ -37,9 +40,13 @@ def get_face_analysis_model() -> FaceAnalysis:
     return _model_instance
 
 
-def _load_model() -> FaceAnalysis:
-    """Internal: loads and prepares the InsightFace model."""
+def _load_model() -> Any:
+    """Internal: loads and prepares the InsightFace model (lazy import)."""
     try:
+        # Lazy import — insightface is only needed at runtime, not import time.
+        # This allows test collection without insightface installed.
+        from insightface.app import FaceAnalysis  # noqa: PLC0415
+
         app = FaceAnalysis(
             name=INSIGHTFACE_MODEL_NAME,
             providers=["CPUExecutionProvider"],   # swap to CUDAExecutionProvider for GPU

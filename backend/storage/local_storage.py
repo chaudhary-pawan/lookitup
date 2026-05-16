@@ -14,7 +14,8 @@ import aiofiles
 from pathlib import Path
 from typing import Optional
 
-from backend.config import LOCAL_UPLOAD_DIR, ALLOWED_IMAGE_EXTENSIONS
+import backend.config as cfg
+from backend.config import ALLOWED_IMAGE_EXTENSIONS
 
 
 class LocalStorage:
@@ -49,7 +50,7 @@ class LocalStorage:
             raise ValueError(f"Unsupported file type: {suffix}")
 
         photo_id = str(uuid.uuid4())
-        event_dir = LOCAL_UPLOAD_DIR / event_id
+        event_dir = cfg.LOCAL_UPLOAD_DIR / event_id
         event_dir.mkdir(parents=True, exist_ok=True)
 
         file_path = event_dir / f"{photo_id}{suffix}"
@@ -84,7 +85,7 @@ class LocalStorage:
         Called by: M3 Ingestion Pipeline (to process photos)
         This is synchronous intentionally — Celery tasks run in worker threads.
         """
-        file_path = LOCAL_UPLOAD_DIR / storage_key
+        file_path = cfg.LOCAL_UPLOAD_DIR / storage_key
         if not file_path.exists():
             raise FileNotFoundError(f"Photo not found: {storage_key}")
 
@@ -93,7 +94,7 @@ class LocalStorage:
     @staticmethod
     def get_photo_path(storage_key: str) -> Path:
         """Returns the absolute Path to the file. Used by FastAPI StaticFiles."""
-        return LOCAL_UPLOAD_DIR / storage_key
+        return cfg.LOCAL_UPLOAD_DIR / storage_key
 
     @staticmethod
     def delete_event_photos(event_id: str) -> None:
@@ -104,6 +105,6 @@ class LocalStorage:
         Privacy-first: organizer can wipe all photos after the event.
         """
         import shutil
-        event_dir = LOCAL_UPLOAD_DIR / event_id
+        event_dir = cfg.LOCAL_UPLOAD_DIR / event_id
         if event_dir.exists():
             shutil.rmtree(event_dir)

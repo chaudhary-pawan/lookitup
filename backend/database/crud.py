@@ -7,9 +7,9 @@ No other module touches SQLAlchemy Session objects directly.
 This is the public interface of the DB Layer (M4).
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 
 from backend.database.models import Event, Photo, EventStatus
 
@@ -121,3 +121,47 @@ async def get_unprocessed_photos(
         )
     )
     return list(result.scalars().all())
+
+
+async def get_all_photos_for_event(
+    db: AsyncSession,
+    event_id: str,
+) -> List[Photo]:
+    """
+    Returns ALL photos belonging to an event (processed or not).
+
+    Called by: GET /api/events/link/{share_token}/photos
+    Used by attendees to browse the full event gallery.
+    """
+    result = await db.execute(
+        select(Photo)
+        .where(Photo.event_id == event_id)
+        .order_by(Photo.uploaded_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_event_photo_counts(
+    db: AsyncSession,
+    event_id: str,
+) -> Dict[str, int]:
+    """
+    Returns the total and processed photo counts for an event.
+
+    Called by: GET /api/events/link/{share_token}
+    Lets the attendee UI show "142/142 photos indexed" or a progress bar.
+    """
+    total_result = await db.execute(
+        select(func.count(Photo.id)).where(Photo.event_id == event_id)
+    )
+    total = total_result.scalar_one() or 0
+
+    processed_result = await db.execute(
+        select(func.count(Photo.id)).where(
+            Photo.event_id == event_id,
+            Photo.processed == True,  # noqa: E712
+        )
+    )
+    processed = processed_result.scalar_one() or 0
+
+    return {"total": total, "processed": processed}

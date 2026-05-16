@@ -4,10 +4,14 @@ M1 — API Gateway: Event Routes
 Handles event lifecycle: create, upload photos, check status, delete.
 
 Routes:
-    POST /api/events/create
-    POST /api/events/{event_id}/upload
-    GET  /api/events/{event_id}/status
+    POST   /api/events/create
+    POST   /api/events/{event_id}/upload
+    GET    /api/events/{event_id}/status
     DELETE /api/events/{event_id}
+
+    # Attendee-facing (use share_token, NOT event_id)
+    GET    /api/events/link/{share_token}            ← validate link exists + get event info
+    GET    /api/events/link/{share_token}/photos     ← list all photos stored under this event
 """
 
 import logging
@@ -152,6 +156,103 @@ async def get_event_status(
         response["share_link"] = f"/event/{event.share_token}"
 
     return response
+
+
+# ── Attendee-facing routes (keyed by share_token) ─────────────────────────────
+
+@router.get("/link/{share_token}")
+async def get_event_by_share_link(
+    share_token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Validates that a share link exists in the database and returns event metadata.
+
+    Called by the attendee frontend when they open a shared link.
+    This is the "does this event exist?" check BEFORE showing the search UI.
+
+    Response:
+        {
+          "event_id": "uuid",
+          "name": "Summer Wedding 2024",
+          "status": "ready" | "processing" | "uploading",
+          "ready": true,
+          "total_photos": 142,
+          "processed_photos": 142,
+          "share_token": "abc123"
+        }
+    """
+    event = await crud.get_event_by_token(db, share_token)
+    if not event or event.status == EventStatus.deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Event link not found. It may have been deleted or the link is incorrect."
+        )
+
+    # Count photos stored under this event
+    photo_counts = await crud.get_event_photo_counts(db, event.id)
+
+    return {
+        "event_id": event.id,
+        "name": event.name,
+        "status": event.status.value,
+        "ready": event.status == EventStatus.ready,
+        "total_photos": photo_counts["total"],
+        "processed_photos": photo_counts["processed"],
+        "share_token": event.share_token,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
+
+
+@router.get("/link/{share_token}/photos")
+async def list_event_photos(
+    share_token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lists all photos stored under an event (keyed by share_token).
+
+    Called by attendees who want to browse photos without face search,
+    or by the frontend to show a gallery preview.
+
+    Response:
+        {
+          "event_id": "uuid",
+          "photos": [
+            {"photo_id": "...", "url": "...", "processed": true, "face_count": 3},
+            ...
+          ]
+        }
+    """
+    event = await crud.get_event_by_token(db, share_token)
+    if not event or event.status == EventStatus.deleted:
+        raise HTTPException(status_code=404, detail="Event link not found.")
+
+    if event.status not in (EventStatus.ready, EventStatus.processing):
+        raise HTTPException(
+            status_code=425,
+            detail="Event photos are not available yet."
+        )
+
+    photos = await crud.get_all_photos_for_event(db, event.id)
+
+    photo_list = []
+    for photo in photos:
+        url = StorageService.get_photo_url(photo.storage_key)
+        photo_list.append({
+            "photo_id": photo.id,
+            "url": url,
+            "processed": photo.processed,
+            "face_count": photo.face_count,
+            "uploaded_at": photo.uploaded_at.isoformat() if photo.uploaded_at else None,
+        })
+
+    return {
+        "event_id": event.id,
+        "event_name": event.name,
+        "total": len(photo_list),
+        "photos": photo_list,
+    }
 
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)

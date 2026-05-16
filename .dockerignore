@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# DB / data files (use Docker volumes instead)
+backend/lookitup.db
+backend/uploads/
+backend/vector_index/index_store/
+
+# Tests (not needed in image)
+tests/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Git / IDE
+.git/
+.gitignore
+.env
+*.md
+
+# OS
+.DS_Store
+Thumbs.db

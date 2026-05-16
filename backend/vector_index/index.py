@@ -17,10 +17,10 @@ import numpy as np
 import faiss
 import json
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Any
 
+import backend.config as _cfg
 from backend.config import (
-    FAISS_INDEX_DIR,
     FACE_EMBEDDING_DIM,
     SIMILARITY_CONFIDENT,
     SIMILARITY_POSSIBLE,
@@ -28,10 +28,51 @@ from backend.config import (
 from backend.vector_index.models import SearchResult
 
 
-# In-memory cache: event_id → (faiss.Index, id_map)
+# In-memory cache: event_id → (faiss index, id_map)
 # id_map: list of photo_ids parallel to FAISS internal indices
-_indices: Dict[str, faiss.IndexFlatIP] = {}
+_indices: Dict[str, Any] = {}
 _id_maps: Dict[str, List[str]] = {}
+
+
+def _faiss_IndexFlatIP(dim: int) -> Any:
+    """
+    Compatibility shim: creates a faiss IndexFlatIP for the given dimension.
+
+    Handles two faiss distributions:
+    - faiss-cpu (pip):     faiss.IndexFlatIP is a direct attribute
+    - Anaconda faiss:      faiss.IndexFlatIP lives in faiss.swigfaiss
+    """
+    if hasattr(faiss, "IndexFlatIP"):
+        return faiss.IndexFlatIP(dim)
+    # Anaconda conda-forge faiss — swigfaiss sub-module
+    from faiss import swigfaiss as _sw  # noqa: PLC0415
+    return _sw.IndexFlatIP(dim)
+
+
+def _faiss_write_index(index: Any, path: str) -> None:
+    """Compatibility shim for faiss.write_index."""
+    if hasattr(faiss, "write_index"):
+        faiss.write_index(index, path)
+    else:
+        from faiss import swigfaiss as _sw  # noqa: PLC0415
+        _sw.write_index(index, path)
+
+
+def _faiss_read_index(path: str) -> Any:
+    """Compatibility shim for faiss.read_index."""
+    if hasattr(faiss, "read_index"):
+        return faiss.read_index(path)
+    from faiss import swigfaiss as _sw  # noqa: PLC0415
+    return _sw.read_index(path)
+
+
+def _faiss_normalize_L2(vec: Any) -> None:
+    """Compatibility shim for faiss.normalize_L2."""
+    if hasattr(faiss, "normalize_L2"):
+        faiss.normalize_L2(vec)
+    else:
+        from faiss import swigfaiss as _sw  # noqa: PLC0415
+        _sw.normalize_L2(vec)
 
 
 class VectorIndex:
@@ -60,7 +101,7 @@ class VectorIndex:
 
         # L2-normalize for cosine similarity via inner product
         vec = embedding.astype(np.float32).reshape(1, -1)
-        faiss.normalize_L2(vec)
+        _faiss_normalize_L2(vec)
 
         _indices[event_id].add(vec)
         _id_maps[event_id].append(photo_id)
@@ -98,7 +139,7 @@ class VectorIndex:
 
         # Normalize query vector
         vec = query_embedding.astype(np.float32).reshape(1, -1)
-        faiss.normalize_L2(vec)
+        _faiss_normalize_L2(vec)
 
         # Search — returns scores and integer indices into the index
         actual_k = min(top_k, index.ntotal)
@@ -146,10 +187,10 @@ class VectorIndex:
         if event_id not in _indices:
             raise KeyError(f"No in-memory index found for event '{event_id}'")
 
-        index_path = FAISS_INDEX_DIR / f"{event_id}.index"
-        map_path = FAISS_INDEX_DIR / f"{event_id}.json"
+        index_path = _cfg.FAISS_INDEX_DIR / f"{event_id}.index"
+        map_path = _cfg.FAISS_INDEX_DIR / f"{event_id}.json"
 
-        faiss.write_index(_indices[event_id], str(index_path))
+        _faiss_write_index(_indices[event_id], str(index_path))
 
         with open(map_path, "w") as f:
             json.dump(_id_maps[event_id], f)
@@ -164,8 +205,8 @@ class VectorIndex:
         Raises:
             FileNotFoundError: If no saved index exists for this event.
         """
-        index_path = FAISS_INDEX_DIR / f"{event_id}.index"
-        map_path = FAISS_INDEX_DIR / f"{event_id}.json"
+        index_path = _cfg.FAISS_INDEX_DIR / f"{event_id}.index"
+        map_path = _cfg.FAISS_INDEX_DIR / f"{event_id}.json"
 
         if not index_path.exists():
             raise FileNotFoundError(
@@ -173,7 +214,7 @@ class VectorIndex:
                 "Ingestion may not be complete yet."
             )
 
-        _indices[event_id] = faiss.read_index(str(index_path))
+        _indices[event_id] = _faiss_read_index(str(index_path))
 
         with open(map_path, "r") as f:
             _id_maps[event_id] = json.load(f)
@@ -181,5 +222,5 @@ class VectorIndex:
     @staticmethod
     def _create_index(event_id: str) -> None:
         """Internal: creates a new empty flat IP index for an event."""
-        _indices[event_id] = faiss.IndexFlatIP(FACE_EMBEDDING_DIM)
+        _indices[event_id] = _faiss_IndexFlatIP(FACE_EMBEDDING_DIM)
         _id_maps[event_id] = []
