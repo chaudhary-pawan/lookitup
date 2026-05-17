@@ -21,6 +21,7 @@ services:
     env_file:
       - .env
     volumes:
+      - ./backend/data:/app/backend/data
       - ./backend/uploads:/app/backend/uploads
       - ./backend/vector_index/index_store:/app/backend/vector_index/index_store
       - insightface_models:/root/.insightface   # share downloaded model weights
@@ -41,6 +42,7 @@ services:
     env_file:
       - .env
     volumes:
+      - ./backend/data:/app/backend/data
       - ./backend/uploads:/app/backend/uploads
       - ./backend/vector_index/index_store:/app/backend/vector_index/index_store
       - insightface_models:/root/.insightface
@@ -62,7 +64,7 @@ services:
     depends_on:
       - api
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+      - PROXY_TARGET=http://api:8000
 
 # Named volume so the InsightFace model (~200MB) is downloaded once
 # and shared between api + celery_worker containers
