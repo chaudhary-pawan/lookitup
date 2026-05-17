@@ -4,7 +4,7 @@
  */
 
 // In dev, Vite proxies /api → localhost:8000. In prod, set VITE_API_BASE_URL.
-const BASE = import.meta.env.VITE_API_BASE_URL || '';
+export const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 /* ── Generic fetch helper ─────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { searchBySelfie, getEventStatus } from '../api';
+import { searchBySelfie, getEventStatus, BASE } from '../api';
 
 /* ── Lightbox ─────────────────────────────────────────────────────────── */
 function Lightbox({ url, onClose }) {
@@ -36,7 +36,7 @@ function PhotoCard({ photo, tier, index, onOpen }) {
   const handleDownload = async (e) => {
     e.stopPropagation();
     try {
-      const res = await fetch(photo.url);
+      const res = await fetch(`${BASE}${photo.url}`);
       const blob = await res.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -51,13 +51,13 @@ function PhotoCard({ photo, tier, index, onOpen }) {
     <div
       className="photo-card fade-up"
       style={{ animationDelay: `${index * 50}ms` }}
-      onClick={() => onOpen(photo.url)}
+      onClick={() => onOpen(`${BASE}${photo.url}`)}
       role="button"
       tabIndex={0}
       aria-label={`View photo — ${scorePercent}% match`}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen(photo.url)}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen(`${BASE}${photo.url}`)}
     >
-      <img src={photo.url} alt={`Event photo ${index + 1}`} loading="lazy" />
+      <img src={`${BASE}${photo.url}`} alt={`Event photo ${index + 1}`} loading="lazy" />
 
       <div className="photo-card-overlay">
         <div className="photo-card-score">{scorePercent}% match</div>
@@ -215,7 +215,7 @@ export default function AttendeePage() {
     for (let i = 0; i < all.length; i++) {
       await new Promise((r) => setTimeout(r, 300 * i));
       const a = document.createElement('a');
-      a.href = all[i].url;
+      a.href = `${BASE}${all[i].url}`;
       a.download = `lookitup-${i + 1}.jpg`;
       a.target = '_blank';
       a.click();
