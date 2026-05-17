@@ -16,7 +16,9 @@ LOCAL_UPLOAD_DIR: Path = BASE_DIR / "uploads"
 LOCAL_UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'lookitup.db'}")
+DB_DIR: Path = BASE_DIR / "data"
+DB_DIR.mkdir(exist_ok=True)
+DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{DB_DIR / 'lookitup.db'}")
 
 # ── Celery / Redis ────────────────────────────────────────────────────────────
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
