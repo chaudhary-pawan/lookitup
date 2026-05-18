@@ -17,6 +17,7 @@ sqlalchemy==2.0.30
 alembic==1.13.1
 aiosqlite==0.20.0              # async SQLite driver for dev
 asyncpg==0.29.0                # async Postgres driver for prod
+pgvector==0.2.5                # Postgres vector extension for SQLAlchemy
 
 # ── Async task queue ──────────────────────────────────────────────────────────
 celery==5.3.6
@@ -26,7 +27,9 @@ redis==5.0.4
 cloudinary==1.40.0             # optional: only needed for cloud storage
 boto3                          # optional: only needed for S3 (unpinned — install separately if needed)
 
-# ── Utilities ─────────────────────────────────────────────────────────────────
+# ── Security & Utilities ──────────────────────────────────────────────────────
+passlib[bcrypt]==1.7.4         # password hashing
+PyJWT==2.8.0                   # JWT tokens
 python-dotenv==1.0.1
 pydantic==2.7.1
 pydantic-settings==2.2.1

@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.auth import get_current_organizer_id
 from backend.database.db import get_db
 from backend.database import crud
 from backend.database.models import EventStatus
@@ -38,6 +39,7 @@ MAX_UPLOAD_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 async def create_event(
     name: str,
     db: AsyncSession = Depends(get_db),
+    organizer_id: str = Depends(get_current_organizer_id)
 ):
     """
     Creates a new event album.
@@ -51,7 +53,8 @@ async def create_event(
           "share_link": "/event/abc123"
         }
     """
-    event = await crud.create_event(db, name=name)
+    # We need to update crud.create_event to accept organizer_id
+    event = await crud.create_event(db, name=name, organizer_id=organizer_id)
     logger.info(f"Created event: {event.id} — '{event.name}'")
 
     return {
@@ -66,6 +69,7 @@ async def upload_photos(
     event_id: str,
     files: List[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
+    organizer_id: str = Depends(get_current_organizer_id)
 ):
     """
     Accepts photo uploads (individual files or a single ZIP).
@@ -84,30 +88,34 @@ async def upload_photos(
     event = await crud.get_event_by_id(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if event.organizer_id != organizer_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this event")
     if event.status == EventStatus.deleted:
         raise HTTPException(status_code=410, detail="Event has been deleted")
 
     photos_to_process = []    # [{"photo_id": ..., "storage_key": ...}]
 
     for upload_file in files:
-        file_bytes = await upload_file.read()
-
-        if len(file_bytes) > MAX_UPLOAD_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File '{upload_file.filename}' exceeds {MAX_UPLOAD_SIZE_MB}MB limit"
-            )
-
-        # Handle ZIP extraction
         if upload_file.filename.lower().endswith(".zip"):
+            import shutil
+            import tempfile
             try:
-                for img_name, img_bytes in extract_images_from_zip(file_bytes):
-                    photo_info = await _save_and_record(db, img_bytes, event_id, img_name)
+                # Save uploaded ZIP to a temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                    shutil.copyfileobj(upload_file.file, tmp)
+                    tmp_path = tmp.name
+
+                for img_name, img_file in extract_images_from_zip(tmp_path):
+                    photo_info = await _save_and_record(db, img_file, event_id, img_name)
                     photos_to_process.append(photo_info)
+                    img_file.close()
+                    
+                import os
+                os.unlink(tmp_path)
             except ValueError as e:
                 raise HTTPException(status_code=422, detail=str(e))
         else:
-            photo_info = await _save_and_record(db, file_bytes, event_id, upload_file.filename)
+            photo_info = await _save_and_record(db, upload_file.file, event_id, upload_file.filename)
             photos_to_process.append(photo_info)
 
     if not photos_to_process:
@@ -239,9 +247,11 @@ async def list_event_photos(
     photo_list = []
     for photo in photos:
         url = StorageService.get_photo_url(photo.storage_key)
+        thumb_url = StorageService.get_photo_url(photo.thumbnail_key) if photo.thumbnail_key else url
         photo_list.append({
             "photo_id": photo.id,
             "url": url,
+            "thumbnail_url": thumb_url,
             "processed": photo.processed,
             "face_count": photo.face_count,
             "uploaded_at": photo.uploaded_at.isoformat() if photo.uploaded_at else None,
@@ -259,6 +269,7 @@ async def list_event_photos(
 async def delete_event(
     event_id: str,
     db: AsyncSession = Depends(get_db),
+    organizer_id: str = Depends(get_current_organizer_id)
 ):
     """
     Deletes all photos for an event (privacy cleanup).
@@ -267,6 +278,8 @@ async def delete_event(
     event = await crud.get_event_by_id(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if event.organizer_id != organizer_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this event")
 
     # Delete files from storage
     StorageService.delete_event_photos(event_id)
@@ -286,11 +299,11 @@ async def delete_event(
 
 async def _save_and_record(
     db: AsyncSession,
-    image_bytes: bytes,
+    image_data,
     event_id: str,
     filename: str,
 ) -> dict:
     """Saves one image to storage + records it in DB. Returns serializable dict."""
-    storage_key = await StorageService.save_photo(image_bytes, event_id, filename)
+    storage_key = await StorageService.save_photo(image_data, event_id, filename)
     photo = await crud.record_photo(db, event_id=event_id, storage_key=storage_key)
     return {"photo_id": photo.id, "storage_key": storage_key}

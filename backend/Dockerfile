@@ -21,9 +21,6 @@ COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt \
     && apt-get purge -y --auto-remove build-essential
 
-# Copy the entire project so `import backend.xxx` works correctly
-COPY backend/ ./backend/
-
 # Pre-download the InsightFace model weights (~200MB) at build time
 # so containers start instantly. Skipped silently if download fails (CI/offline).
 RUN python -c "\
@@ -31,5 +28,8 @@ from insightface.app import FaceAnalysis; \
 m = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); \
 m.prepare(ctx_id=-1, det_size=(640,640)); \
 print('InsightFace model ready')" || echo "Model pre-download skipped"
+
+# Copy the entire project so `import backend.xxx` works correctly
+COPY backend/ ./backend/
 
 EXPOSE 8000

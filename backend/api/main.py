@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import events, search, photos
+from backend.api.routes import events, search, photos, auth
 from backend.api.middleware.validation import UploadSizeLimitMiddleware
 from backend.database.db import init_db
 from backend.face_engine.model_loader import get_face_analysis_model
@@ -78,6 +78,7 @@ app.add_middleware(UploadSizeLimitMiddleware)
 app.include_router(events.router)
 app.include_router(search.router)
 app.include_router(photos.router)
+app.include_router(auth.router)
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

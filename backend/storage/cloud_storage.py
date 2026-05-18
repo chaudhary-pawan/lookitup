@@ -41,7 +41,7 @@ class CloudinaryStorage:
 
     @staticmethod
     async def save_photo(
-        photo_bytes: bytes,
+        photo_data,
         event_id: str,
         original_filename: str,
     ) -> str:
@@ -50,8 +50,11 @@ class CloudinaryStorage:
         photo_id = str(uuid.uuid4())
         public_id = f"lookitup/{event_id}/{photo_id}"
 
+        # If it's bytes, wrap it in BytesIO. If it's a file, pass it directly.
+        upload_target = BytesIO(photo_data) if isinstance(photo_data, bytes) else photo_data
+
         result = cloudinary.uploader.upload(
-            BytesIO(photo_bytes),
+            upload_target,
             public_id=public_id,
             folder=f"lookitup/{event_id}",
             resource_type="image",

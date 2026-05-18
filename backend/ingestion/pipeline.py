@@ -19,7 +19,9 @@ Flow per event:
 """
 
 import logging
-from typing import List
+from typing import List, Tuple, Optional
+from io import BytesIO
+from PIL import Image
 
 from backend.storage import StorageService
 from backend.face_engine import FaceEngine
@@ -36,14 +38,13 @@ class IngestionPipeline:
     Uses synchronous StorageService.get_photo_bytes() — no asyncio needed here.
     """
 
-    @staticmethod
     def process_single_photo(
         photo_id: str,
         storage_key: str,
         event_id: str,
-    ) -> int:
+    ) -> Tuple[int, str, Optional[list]]:
         """
-        Processes one photo: detect faces → embed → store in FAISS.
+        Processes one photo: generate thumbnail → detect faces → embed → store in FAISS.
 
         Args:
             photo_id:    DB identifier for this photo.
@@ -51,7 +52,7 @@ class IngestionPipeline:
             event_id:    Which event this photo belongs to.
 
         Returns:
-            Number of faces found in this photo.
+            Tuple of (face_count, thumbnail_key, first_face_embedding)
 
         Note:
             DB updates (mark_photo_processed) are done in tasks.py
@@ -62,13 +63,31 @@ class IngestionPipeline:
         # Step 1: Get photo bytes from storage
         photo_bytes = StorageService.get_photo_bytes(storage_key)
 
+        # Step 1.5: Generate WebP Thumbnail
+        with Image.open(BytesIO(photo_bytes)) as img:
+            # Convert to RGB if necessary
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.thumbnail((400, 400)) # Maximum 400px
+            thumb_io = BytesIO()
+            img.save(thumb_io, format="WEBP", quality=80)
+            thumb_bytes = thumb_io.getvalue()
+        
+        # Save thumbnail synchronously using asyncio.run since we are in a sync pipeline method
+        # Wait, StorageService.save_photo is async.
+        # But we are in a sync function. We must use asyncio.run to call it.
+        import asyncio
+        thumb_filename = f"thumb_{photo_id}.webp"
+        thumbnail_key = asyncio.run(StorageService.save_photo(thumb_bytes, event_id, thumb_filename))
+
         # Step 2: Detect all faces + extract embeddings (M5)
         face_embeddings = FaceEngine.detect_and_embed(photo_bytes)
         face_count = len(face_embeddings)
+        first_embedding = face_embeddings[0].vector.tolist() if face_count > 0 else None
 
         if face_count == 0:
             logger.info(f"No faces found in photo {photo_id} — skipping index update")
-            return 0
+            return 0, thumbnail_key, None
 
         logger.info(f"Found {face_count} face(s) in photo {photo_id}")
 
@@ -80,7 +99,7 @@ class IngestionPipeline:
                 event_id=event_id,
             )
 
-        return face_count
+        return face_count, thumbnail_key, first_embedding
 
     @staticmethod
     def finalize_event(event_id: str) -> None:

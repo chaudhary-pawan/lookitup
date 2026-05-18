@@ -16,7 +16,7 @@ from backend.database.models import Event, Photo, EventStatus
 
 # ── Event operations ──────────────────────────────────────────────────────────
 
-async def create_event(db: AsyncSession, name: str) -> Event:
+async def create_event(db: AsyncSession, name: str, organizer_id: str) -> Event:
     """
     Creates a new event record.
 
@@ -24,7 +24,7 @@ async def create_event(db: AsyncSession, name: str) -> Event:
 
     Returns the new Event object (with auto-generated id and share_token).
     """
-    event = Event(name=name)
+    event = Event(name=name, organizer_id=organizer_id)
     db.add(event)
     await db.commit()
     await db.refresh(event)
@@ -79,16 +79,25 @@ async def mark_photo_processed(
     db: AsyncSession,
     photo_id: str,
     face_count: int,
+    thumbnail_key: Optional[str] = None,
+    embedding: Optional[list] = None,
 ) -> None:
     """
     Marks a photo as processed and records how many faces were found.
+    Also saves the thumbnail key and the vector embedding (if any).
 
     Called by: M3 Ingestion Pipeline (after each photo is processed)
     """
+    values = {"processed": True, "face_count": face_count}
+    if thumbnail_key:
+        values["thumbnail_key"] = thumbnail_key
+    if embedding is not None:
+        values["embedding"] = embedding
+
     await db.execute(
         update(Photo)
         .where(Photo.id == photo_id)
-        .values(processed=True, face_count=face_count)
+        .values(**values)
     )
     await db.commit()
 

@@ -70,14 +70,14 @@ def process_album_task(
         storage_key = photo_data["storage_key"]
 
         try:
-            face_count = IngestionPipeline.process_single_photo(
+            face_count, thumbnail_key, embedding = IngestionPipeline.process_single_photo(
                 photo_id=photo_id,
                 storage_key=storage_key,
                 event_id=event_id,
             )
 
             # Update DB synchronously using asyncio.run (we're in a sync Celery worker)
-            asyncio.run(_mark_processed(photo_id, face_count))
+            asyncio.run(_mark_processed(photo_id, face_count, thumbnail_key, embedding))
             processed_count += 1
             total_faces += face_count
 
@@ -107,11 +107,11 @@ def process_album_task(
 
 # ── Async helpers (run inside sync Celery worker via asyncio.run) ──────────────
 
-async def _mark_processed(photo_id: str, face_count: int) -> None:
+async def _mark_processed(photo_id: str, face_count: int, thumbnail_key: str, embedding: list) -> None:
     from backend.database.db import AsyncSessionLocal
     from backend.database import crud
     async with AsyncSessionLocal() as db:
-        await crud.mark_photo_processed(db, photo_id, face_count)
+        await crud.mark_photo_processed(db, photo_id, face_count, thumbnail_key=thumbnail_key, embedding=embedding)
 
 
 async def _mark_event_ready(event_id: str) -> None:

@@ -26,7 +26,7 @@ class LocalStorage:
 
     @staticmethod
     async def save_photo(
-        photo_bytes: bytes,
+        photo_data,
         event_id: str,
         original_filename: str,
     ) -> str:
@@ -36,14 +36,13 @@ class LocalStorage:
         Called by: M1 API Gateway (during photo upload)
 
         Args:
-            photo_bytes:       Raw image bytes.
+            photo_data:        Raw image bytes OR a file-like object.
             event_id:          Organizes photos into per-event directories.
             original_filename: Used only to preserve the file extension.
 
         Returns:
             storage_key: A unique identifier for this photo.
                          For LocalStorage: relative path like "{event_id}/{photo_id}.jpg"
-                         This key is stored in M4 DB and used to retrieve the file later.
         """
         suffix = Path(original_filename).suffix.lower()
         if suffix not in ALLOWED_IMAGE_EXTENSIONS:
@@ -55,8 +54,16 @@ class LocalStorage:
 
         file_path = event_dir / f"{photo_id}{suffix}"
 
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(photo_bytes)
+        if isinstance(photo_data, bytes):
+            async with aiofiles.open(file_path, "wb") as f:
+                await f.write(photo_data)
+        else:
+            # Stream from file-like object using shutil.copyfileobj
+            import shutil
+            # photo_data might be an async spooled file from FastAPI, but its .file attribute is standard sync IO
+            # If it's a raw file object, copyfileobj is safe and efficient
+            with open(file_path, "wb") as f:
+                shutil.copyfileobj(photo_data, f)
 
         # storage_key is relative to LOCAL_UPLOAD_DIR — portable
         return f"{event_id}/{photo_id}{suffix}"

@@ -6,9 +6,11 @@ All modules import from here — never hardcode values elsewhere.
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # ── Base paths ────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR.parent / ".env")
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 STORAGE_BACKEND: str = os.getenv("STORAGE_BACKEND", "local")   # "local" | "cloudinary"

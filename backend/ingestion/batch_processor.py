@@ -15,28 +15,28 @@ from typing import Iterator, Tuple
 from backend.config import ALLOWED_IMAGE_EXTENSIONS
 
 
-def extract_images_from_zip(zip_bytes: bytes) -> Iterator[Tuple[str, bytes]]:
+def extract_images_from_zip(zip_path: str):
     """
-    Extracts all image files from a ZIP archive.
+    Extracts all image files from a ZIP archive on disk.
 
     Called by: M1 API Gateway (when organizer uploads a ZIP file)
 
     Args:
-        zip_bytes: Raw bytes of the uploaded ZIP file.
+        zip_path: Path to the temporary ZIP file.
 
     Yields:
-        (filename, image_bytes) tuples for each supported image found.
+        (filename, file_like_object) tuples for each supported image found.
 
     Raises:
-        ValueError: If the bytes are not a valid ZIP file.
+        ValueError: If the file is not a valid ZIP archive.
         ValueError: If the ZIP contains no supported images.
     """
-    if not zipfile.is_zipfile(BytesIO(zip_bytes)):
+    if not zipfile.is_zipfile(zip_path):
         raise ValueError("Uploaded file is not a valid ZIP archive.")
 
     found_count = 0
 
-    with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+    with zipfile.ZipFile(zip_path, "r") as zf:
         for name in zf.namelist():
             # Skip directories and hidden files (macOS __MACOSX artifacts, etc.)
             if name.endswith("/") or name.startswith("__MACOSX") or name.startswith("."):
@@ -46,9 +46,12 @@ def extract_images_from_zip(zip_bytes: bytes) -> Iterator[Tuple[str, bytes]]:
             if suffix not in ALLOWED_IMAGE_EXTENSIONS:
                 continue
 
-            image_bytes = zf.read(name)
+            # We yield an open file object for the image inside the zip
+            # Since ZipExtFile doesn't support tell/seek perfectly and can be slow,
+            # yielding it directly is fine for shutil.copyfileobj
+            image_file = zf.open(name)
             filename = name.split("/")[-1]   # strip any subdirectory path
-            yield filename, image_bytes
+            yield filename, image_file
             found_count += 1
 
     if found_count == 0:
