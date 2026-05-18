@@ -174,3 +174,31 @@ async def get_event_photo_counts(
     processed = processed_result.scalar_one() or 0
 
     return {"total": total, "processed": processed}
+
+
+async def search_photos_by_embedding(
+    db: AsyncSession,
+    event_id: str,
+    query_embedding: list,
+    limit: int = 50,
+    threshold: float = 0.55
+) -> List[tuple[Photo, float]]:
+    """
+    Uses pgvector to find the most similar photos in the database.
+    Calculates cosine distance and converts it to cosine similarity.
+    Returns a list of tuples (Photo, similarity_score).
+    """
+    # pgvector's cosine_distance returns (1 - cosine_similarity)
+    # We want similarity, so we compute: 1 - cosine_distance
+    similarity_expr = (1 - Photo.embedding.cosine_distance(query_embedding)).label("similarity")
+
+    result = await db.execute(
+        select(Photo, similarity_expr)
+        .where(Photo.event_id == event_id)
+        .where(Photo.embedding != None)
+        .where(similarity_expr >= threshold)
+        .order_by(similarity_expr.desc())
+        .limit(limit)
+    )
+    
+    return result.all()

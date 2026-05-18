@@ -22,7 +22,7 @@ from backend.database.db import get_db
 from backend.database import crud
 from backend.database.models import EventStatus
 from backend.face_engine import FaceEngine, NoFaceDetectedError, MultipleFacesError
-from backend.vector_index import VectorIndex
+from backend.config import SIMILARITY_CONFIDENT
 from backend.storage import StorageService
 
 router = APIRouter(prefix="/api/events", tags=["search"])
@@ -78,17 +78,14 @@ async def search_photos(
         logger.error(f"Face embedding failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to process selfie image.")
 
-    # ── Step 3: Search FAISS index (M6) ───────────────────────────────────────
-    try:
-        search_results = VectorIndex.search(
-            query_embedding=query_embedding,
-            event_id=event.id,
-        )
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=503,
-            detail="Event index not found. Ingestion may have failed."
-        )
+    # ── Step 3: Search using pgvector (M4) ────────────────────────────────────
+    query_embedding_list = query_embedding.tolist()
+    search_results = await crud.search_photos_by_embedding(
+        db, 
+        event.id, 
+        query_embedding_list, 
+        limit=50
+    )
 
     if not search_results:
         return {
@@ -98,28 +95,22 @@ async def search_photos(
             "total_matches": 0,
         }
 
-    # ── Step 4: Fetch photo metadata from DB (M4) ─────────────────────────────
-    photo_ids = [r.photo_id for r in search_results]
-    photos = await crud.get_photos_by_ids(db, photo_ids)
-    photo_map = {p.id: p for p in photos}
-
-    # ── Step 5: Build response with storage URLs (M2) ─────────────────────────
+    # ── Step 4: Build response with storage URLs (M2) ─────────────────────────
     confident_results = []
     possible_results = []
 
-    for result in search_results:
-        photo = photo_map.get(result.photo_id)
-        if not photo:
-            continue  # photo may have been deleted
-
+    for photo, similarity in search_results:
         url = StorageService.get_photo_url(photo.storage_key)
+        thumb_url = StorageService.get_photo_url(photo.thumbnail_key) if photo.thumbnail_key else url
+        
         entry = {
-            "photo_id": result.photo_id,
+            "photo_id": photo.id,
             "url": url,
-            "score": round(result.similarity, 4),
+            "thumbnail_url": thumb_url,
+            "score": round(similarity, 4),
         }
 
-        if result.tier == "confident":
+        if similarity >= SIMILARITY_CONFIDENT:
             confident_results.append(entry)
         else:
             possible_results.append(entry)

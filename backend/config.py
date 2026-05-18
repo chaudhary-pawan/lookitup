@@ -29,9 +29,7 @@ REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 INSIGHTFACE_MODEL_NAME: str = os.getenv("INSIGHTFACE_MODEL", "buffalo_l")
 FACE_EMBEDDING_DIM: int = 512
 
-# ── Vector Index ──────────────────────────────────────────────────────────────
-FAISS_INDEX_DIR: Path = BASE_DIR / "vector_index" / "index_store"
-FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
+# ── Vector Search ─────────────────────────────────────────────────────────────
 SIMILARITY_CONFIDENT: float = 0.75   # score > this → "confident"
 SIMILARITY_POSSIBLE: float = 0.55    # score > this → "possible"
 

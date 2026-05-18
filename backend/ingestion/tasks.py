@@ -87,9 +87,8 @@ def process_album_task(
             # Don't re-raise — one bad photo shouldn't abort the whole album
             continue
 
-    # Persist FAISS index and mark event ready
+    # Mark event ready
     try:
-        IngestionPipeline.finalize_event(event_id)
         asyncio.run(_mark_event_ready(event_id))
     except Exception as exc:
         logger.error(f"Failed to finalize event {event_id}: {exc}", exc_info=True)

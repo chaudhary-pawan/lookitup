@@ -10,8 +10,7 @@ opencv-python-headless==4.9.0.80
 numpy==1.26.4
 
 # ── Vector Search ─────────────────────────────────────────────────────────────
-faiss-cpu==1.8.0               # swap to faiss-gpu if CUDA available
-
+# Replaced FAISS with pgvector for production vector search
 # ── Database ──────────────────────────────────────────────────────────────────
 sqlalchemy==2.0.30
 alembic==1.13.1

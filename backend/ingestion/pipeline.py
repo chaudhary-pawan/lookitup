@@ -25,7 +25,6 @@ from PIL import Image
 
 from backend.storage import StorageService
 from backend.face_engine import FaceEngine
-from backend.vector_index import VectorIndex
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ class IngestionPipeline:
         event_id: str,
     ) -> Tuple[int, str, Optional[list]]:
         """
-        Processes one photo: generate thumbnail → detect faces → embed → store in FAISS.
+        Processes one photo: generate thumbnail → detect faces → extract embedding.
 
         Args:
             photo_id:    DB identifier for this photo.
@@ -91,23 +90,4 @@ class IngestionPipeline:
 
         logger.info(f"Found {face_count} face(s) in photo {photo_id}")
 
-        # Step 3: Add each embedding to the event's FAISS index (M6)
-        for face in face_embeddings:
-            VectorIndex.add(
-                embedding=face.vector,
-                photo_id=photo_id,
-                event_id=event_id,
-            )
-
         return face_count, thumbnail_key, first_embedding
-
-    @staticmethod
-    def finalize_event(event_id: str) -> None:
-        """
-        Persists the FAISS index to disk after all photos are processed.
-
-        Called by tasks.py after the photo loop completes.
-        After this, the event is ready for attendee queries.
-        """
-        VectorIndex.save_index(event_id)
-        logger.info(f"FAISS index for event {event_id} saved to disk")

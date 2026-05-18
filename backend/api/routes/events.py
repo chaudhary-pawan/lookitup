@@ -284,12 +284,7 @@ async def delete_event(
     # Delete files from storage
     StorageService.delete_event_photos(event_id)
 
-    # Remove FAISS index files
-    from backend.config import FAISS_INDEX_DIR
-    for ext in [".index", ".json"]:
-        index_file = FAISS_INDEX_DIR / f"{event_id}{ext}"
-        if index_file.exists():
-            index_file.unlink()
+    # No need to remove FAISS index files anymore, we use pgvector
 
     await crud.set_event_status(db, event_id, EventStatus.deleted)
     logger.info(f"Event {event_id} deleted — all photos purged")
