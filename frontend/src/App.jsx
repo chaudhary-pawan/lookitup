@@ -8,6 +8,17 @@ import HomePage from './pages/HomePage';
 import OrganizerPage from './pages/OrganizerPage';
 import AttendeePage from './pages/AttendeePage';
 
+import AuthPage from './pages/AuthPage';
+
+// A simple component to protect the organizer route
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem('organizer_token');
+  if (!token) {
+    return <AuthPage />;
+  }
+  return children;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -16,7 +27,12 @@ export default function App() {
       <main style={{ position: 'relative', zIndex: 1, minHeight: 'calc(100vh - 128px)' }}>
         <Routes>
           <Route path="/"            element={<HomePage />} />
-          <Route path="/organizer"   element={<OrganizerPage />} />
+          <Route path="/auth"        element={<AuthPage />} />
+          <Route path="/organizer"   element={
+            <ProtectedRoute>
+              <OrganizerPage />
+            </ProtectedRoute>
+          } />
           <Route path="/event/:token" element={<AttendeePage />} />
         </Routes>
       </main>

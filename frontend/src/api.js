@@ -8,6 +8,14 @@ export const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 /* ── Generic fetch helper ─────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
+  const token = localStorage.getItem('organizer_token');
+  if (token) {
+    options.headers = {
+      ...options.headers,
+      Authorization: `Bearer ${token}`
+    };
+  }
+
   const res = await fetch(`${BASE}${path}`, options);
 
   if (!res.ok) {
@@ -25,6 +33,41 @@ async function apiFetch(path, options = {}) {
   if (res.status === 204) return null;
 
   return res.json();
+}
+
+/* ── Auth ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Register a new organizer
+ */
+export async function registerOrganizer(email, password) {
+  return apiFetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+/**
+ * Login organizer
+ */
+export async function loginOrganizer(email, password) {
+  const formData = new URLSearchParams();
+  formData.append('username', email); // OAuth2 spec uses 'username'
+  formData.append('password', password);
+
+  return apiFetch('/api/auth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData,
+  });
+}
+
+/**
+ * Get current organizer info
+ */
+export async function getMe() {
+  return apiFetch('/api/auth/me');
 }
 
 /* ── Events ───────────────────────────────────────────────────────────── */
@@ -53,7 +96,10 @@ export async function uploadPhotos(eventId, files, onProgress) {
     files.forEach((f) => formData.append('files', f));
 
     const xhr = new XMLHttpRequest();
-
+    
+    // Add JWT Token
+    const token = localStorage.getItem('organizer_token');
+    
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && onProgress) {
         onProgress(Math.round((e.loaded / e.total) * 100));
@@ -76,6 +122,9 @@ export async function uploadPhotos(eventId, files, onProgress) {
     xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
 
     xhr.open('POST', `${BASE}/api/events/${eventId}/upload`);
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
     xhr.send(formData);
   });
 }

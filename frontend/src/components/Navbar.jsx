@@ -69,6 +69,19 @@ export default function Navbar() {
             >
               📸 Organizer
             </Link>
+
+            {/* Logout Button (if token exists) */}
+            {localStorage.getItem('organizer_token') && (
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  localStorage.removeItem('organizer_token');
+                  navigate('/auth');
+                }}
+              >
+                Logout
+              </button>
+            )}
           </div>
         </div>
       </nav>

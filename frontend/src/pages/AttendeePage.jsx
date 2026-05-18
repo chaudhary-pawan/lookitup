@@ -57,7 +57,7 @@ function PhotoCard({ photo, tier, index, onOpen }) {
       aria-label={`View photo — ${scorePercent}% match`}
       onKeyDown={(e) => e.key === 'Enter' && onOpen(`${BASE}${photo.url}`)}
     >
-      <img src={`${BASE}${photo.url}`} alt={`Event photo ${index + 1}`} loading="lazy" />
+      <img src={`${BASE}${photo.thumbnail_url || photo.url}`} alt={`Event photo ${index + 1}`} loading="lazy" />
 
       <div className="photo-card-overlay">
         <div className="photo-card-score">{scorePercent}% match</div>
