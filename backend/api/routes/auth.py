@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from backend.database.db import get_db
 from backend.database.models import Organizer
-from backend.api.auth import get_password_hash, verify_password, create_access_token
+from backend.api.auth import get_password_hash, verify_password, create_access_token, get_current_organizer_id
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -41,3 +41,14 @@ async def login(req: AuthRequest, db: AsyncSession = Depends(get_db)):
         
     token = create_access_token({"sub": org.id})
     return {"access_token": token, "token_type": "bearer"}
+
+@router.get("/me")
+async def get_me(
+    org_id: str = Depends(get_current_organizer_id),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Organizer).where(Organizer.id == org_id))
+    org = result.scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organizer not found")
+    return {"id": org.id, "email": org.email, "created_at": org.created_at}

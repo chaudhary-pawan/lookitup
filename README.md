@@ -105,8 +105,9 @@ Services:
 
 ---
 
-## Resume Bullet Points
+## Resume Highlights
 
-> *"Built LookItUp, an end-to-end face-recognition photo retrieval system using InsightFace (ArcFace) and FAISS vector search, enabling event attendees to find their photos from 500+ image albums via a single selfie."*
-
-> *"Designed a privacy-first architecture storing only 512-dim face embeddings (no raw face crops), with async batch processing via Celery + Redis."*
+- **Product:** LookItUp is an AI-powered full-stack photo retrieval platform that allows event attendees to instantly find their photos from massive albums using a single selfie.
+- **Target Audience:** Designed for event organizers (weddings, corporate events, parties) to seamlessly distribute media, and for attendees to effortlessly retrieve their personal photos.
+- **Impact & Traction:** Eliminates the need to manually scroll through hundreds of images, saving hours of search time per attendee while drastically increasing photo engagement and download rates for organizers.
+- **Technical Achievements:** Engineered a scalable, privacy-first backend utilizing InsightFace (ArcFace) for extracting 512-dimensional face embeddings, pgvector/FAISS for high-speed similarity search, and Celery + Redis for asynchronous processing of large image batches.

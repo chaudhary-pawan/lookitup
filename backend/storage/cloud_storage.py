@@ -13,6 +13,7 @@ Note: This is a stub. Implement when moving to production hosting.
 
 import cloudinary
 import cloudinary.uploader
+import cloudinary.api
 from io import BytesIO
 from pathlib import Path
 
@@ -87,5 +88,9 @@ class CloudinaryStorage:
     @staticmethod
     def delete_event_photos(event_id: str) -> None:
         """Deletes all photos in the event folder from Cloudinary."""
-        cloudinary.api.delete_resources_by_prefix(f"lookitup/{event_id}/")
-        cloudinary.api.delete_folder(f"lookitup/{event_id}/")
+        try:
+            cloudinary.api.delete_resources_by_prefix(f"lookitup/{event_id}/")
+            cloudinary.api.delete_folder(f"lookitup/{event_id}/")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to delete Cloudinary resources for {event_id}: {e}")

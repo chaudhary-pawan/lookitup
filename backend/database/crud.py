@@ -36,6 +36,16 @@ async def get_event_by_id(db: AsyncSession, event_id: str) -> Optional[Event]:
     result = await db.execute(select(Event).where(Event.id == event_id))
     return result.scalar_one_or_none()
 
+async def get_all_events_for_organizer(db: AsyncSession, organizer_id: str) -> List[Event]:
+    """Retrieves all events created by an organizer."""
+    result = await db.execute(
+        select(Event)
+        .where(Event.organizer_id == organizer_id)
+        .where(Event.status != EventStatus.deleted)
+        .order_by(Event.created_at.desc())
+    )
+    return list(result.scalars().all())
+
 
 async def get_event_by_token(db: AsyncSession, share_token: str) -> Optional[Event]:
     """

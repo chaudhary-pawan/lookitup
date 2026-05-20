@@ -20,14 +20,16 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
+      - ./backend:/app/backend
       - ./backend/data:/app/backend/data
       - ./backend/uploads:/app/backend/uploads
-      - ./backend/vector_index/index_store:/app/backend/vector_index/index_store
       - insightface_models:/root/.insightface   # share downloaded model weights
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     command: >
       uvicorn backend.api.main:app
       --host 0.0.0.0
@@ -41,14 +43,16 @@ services:
       dockerfile: backend/Dockerfile
     env_file:
       - .env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
+      - ./backend:/app/backend
       - ./backend/data:/app/backend/data
       - ./backend/uploads:/app/backend/uploads
-      - ./backend/vector_index/index_store:/app/backend/vector_index/index_store
       - insightface_models:/root/.insightface
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     command: >
       celery -A backend.celery_app worker
       --loglevel=info
@@ -61,6 +65,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - api
     environment:

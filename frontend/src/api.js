@@ -52,14 +52,10 @@ export async function registerOrganizer(email, password) {
  * Login organizer
  */
 export async function loginOrganizer(email, password) {
-  const formData = new URLSearchParams();
-  formData.append('username', email); // OAuth2 spec uses 'username'
-  formData.append('password', password);
-
-  return apiFetch('/api/auth/token', {
+  return apiFetch('/api/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: formData,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
   });
 }
 
@@ -139,11 +135,26 @@ export async function getEventStatus(eventId) {
 }
 
 /**
+ * Get all events for the current organizer.
+ */
+export async function getOrganizerEvents() {
+  return apiFetch('/api/events/');
+}
+
+/**
  * Delete an event and all its photos.
  * @param {string} eventId
  */
 export async function deleteEvent(eventId) {
   return apiFetch(`/api/events/${eventId}`, { method: 'DELETE' });
+}
+
+/**
+ * Expire an event link so attendees can no longer access it.
+ * @param {string} eventId
+ */
+export async function expireEvent(eventId) {
+  return apiFetch(`/api/events/${eventId}/expire`, { method: 'PUT' });
 }
 
 /* ── Search ───────────────────────────────────────────────────────────── */

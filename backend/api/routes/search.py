@@ -58,6 +58,9 @@ async def search_photos(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    if event.status == EventStatus.expired:
+        raise HTTPException(status_code=403, detail="This event link has expired.")
+
     if event.status != EventStatus.ready:
         raise HTTPException(
             status_code=425,

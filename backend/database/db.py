@@ -29,10 +29,18 @@ def _make_async_url(url: str) -> str:
 
 ASYNC_DATABASE_URL = _make_async_url(DATABASE_URL)
 
+engine_kwargs = {
+    "echo": False,
+}
+if "sqlite" in ASYNC_DATABASE_URL:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 300
+
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    echo=False,                        # set True for SQL query logging
-    connect_args={"check_same_thread": False} if "sqlite" in ASYNC_DATABASE_URL else {},
+    **engine_kwargs
 )
 
 AsyncSessionLocal = async_sessionmaker(

@@ -26,6 +26,7 @@ class EventStatus(str, enum.Enum):
     uploading   = "uploading"    # organizer is uploading photos
     processing  = "processing"   # Celery task running (M3 ingestion)
     ready       = "ready"        # attendees can search
+    expired     = "expired"      # link is no longer active
     deleted     = "deleted"      # organizer deleted — photos purged
 
 

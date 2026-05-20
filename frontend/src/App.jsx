@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
 import Navbar from './components/Navbar';
@@ -14,7 +14,7 @@ import AuthPage from './pages/AuthPage';
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('organizer_token');
   if (!token) {
-    return <AuthPage />;
+    return <Navigate to="/auth" replace />;
   }
   return children;
 }

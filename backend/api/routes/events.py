@@ -64,6 +64,50 @@ async def create_event(
     }
 
 
+@router.get("/")
+async def get_organizer_events(
+    db: AsyncSession = Depends(get_db),
+    organizer_id: str = Depends(get_current_organizer_id)
+):
+    """
+    Returns all events created by the current organizer.
+    """
+    events = await crud.get_all_events_for_organizer(db, organizer_id)
+    return [
+        {
+            "id": event.id,
+            "name": event.name,
+            "status": event.status.value,
+            "created_at": event.created_at.isoformat() if event.created_at else None,
+            "share_token": event.share_token,
+            "share_link": f"/event/{event.share_token}"
+        }
+        for event in events
+    ]
+
+
+@router.put("/{event_id}/expire")
+async def expire_event(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    organizer_id: str = Depends(get_current_organizer_id)
+):
+    """
+    Marks an event as expired, meaning attendees can no longer access it via the share link.
+    """
+    event = await crud.get_event_by_id(db, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.organizer_id != organizer_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this event")
+    if event.status == EventStatus.deleted:
+        raise HTTPException(status_code=410, detail="Event has been deleted")
+
+    await crud.set_event_status(db, event_id, EventStatus.expired)
+    logger.info(f"Event {event_id} expired by organizer")
+    return {"message": "Event expired successfully", "status": EventStatus.expired.value}
+
+
 @router.post("/{event_id}/upload", status_code=status.HTTP_202_ACCEPTED)
 async def upload_photos(
     event_id: str,
@@ -196,6 +240,11 @@ async def get_event_by_share_link(
             status_code=404,
             detail="Event link not found. It may have been deleted or the link is incorrect."
         )
+    if event.status == EventStatus.expired:
+        raise HTTPException(
+            status_code=403,
+            detail="This event link has expired."
+        )
 
     # Count photos stored under this event
     photo_counts = await crud.get_event_photo_counts(db, event.id)
@@ -235,6 +284,8 @@ async def list_event_photos(
     event = await crud.get_event_by_token(db, share_token)
     if not event or event.status == EventStatus.deleted:
         raise HTTPException(status_code=404, detail="Event link not found.")
+    if event.status == EventStatus.expired:
+        raise HTTPException(status_code=403, detail="This event link has expired.")
 
     if event.status not in (EventStatus.ready, EventStatus.processing):
         raise HTTPException(
