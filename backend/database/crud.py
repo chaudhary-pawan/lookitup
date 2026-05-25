@@ -16,7 +16,7 @@ from backend.database.models import Event, Photo, EventStatus
 
 # ── Event operations ──────────────────────────────────────────────────────────
 
-async def create_event(db: AsyncSession, name: str, organizer_id: str) -> Event:
+async def create_event(db: AsyncSession, name: str, organizer_id: str = "test-organizer-id") -> Event:
     """
     Creates a new event record.
 
@@ -101,14 +101,59 @@ async def mark_photo_processed(
     values = {"processed": True, "face_count": face_count}
     if thumbnail_key:
         values["thumbnail_key"] = thumbnail_key
-    if embedding is not None:
-        values["embedding"] = embedding
 
     await db.execute(
         update(Photo)
         .where(Photo.id == photo_id)
         .values(**values)
     )
+
+    if embedding is not None:
+        from backend.database.models import PhotoFace
+        photo_face = PhotoFace(
+            photo_id=photo_id,
+            embedding=embedding,
+            bbox=None,
+            confidence=1.0
+        )
+        db.add(photo_face)
+
+    await db.commit()
+
+
+async def mark_photo_processed_with_faces(
+    db: AsyncSession,
+    photo_id: str,
+    face_count: int,
+    thumbnail_key: Optional[str] = None,
+    embeddings: Optional[List] = None,
+) -> None:
+    """
+    Marks a photo as processed, saves thumbnail key, and inserts PhotoFace records
+    for all detected faces.
+    """
+    values = {"processed": True, "face_count": face_count}
+    if thumbnail_key:
+        values["thumbnail_key"] = thumbnail_key
+
+    await db.execute(
+        update(Photo)
+        .where(Photo.id == photo_id)
+        .values(**values)
+    )
+
+    if embeddings:
+        from backend.database.models import PhotoFace
+        for face in embeddings:
+            bbox_str = ",".join(map(str, face.bbox)) if face.bbox else None
+            photo_face = PhotoFace(
+                photo_id=photo_id,
+                bbox=bbox_str,
+                embedding=face.vector.tolist(),
+                confidence=face.confidence
+            )
+            db.add(photo_face)
+
     await db.commit()
 
 
@@ -198,17 +243,25 @@ async def search_photos_by_embedding(
     Calculates cosine distance and converts it to cosine similarity.
     Returns a list of tuples (Photo, similarity_score).
     """
+    from backend.database.models import PhotoFace
     # pgvector's cosine_distance returns (1 - cosine_similarity)
-    # We want similarity, so we compute: 1 - cosine_distance
-    similarity_expr = (1 - Photo.embedding.cosine_distance(query_embedding)).label("similarity")
+    similarity_expr = (1 - PhotoFace.embedding.cosine_distance(query_embedding)).label("similarity")
 
     result = await db.execute(
         select(Photo, similarity_expr)
+        .join(PhotoFace, Photo.id == PhotoFace.photo_id)
         .where(Photo.event_id == event_id)
-        .where(Photo.embedding != None)
         .where(similarity_expr >= threshold)
         .order_by(similarity_expr.desc())
         .limit(limit)
     )
     
-    return result.all()
+    # Deduplicate photos so if multiple faces match in one photo, we only return it once
+    raw_results = result.all()
+    seen_photos = {}
+    for photo, similarity in raw_results:
+        if photo.id not in seen_photos or similarity > seen_photos[photo.id][1]:
+            seen_photos[photo.id] = (photo, similarity)
+
+    sorted_results = sorted(seen_photos.values(), key=lambda x: x[1], reverse=True)
+    return sorted_results
