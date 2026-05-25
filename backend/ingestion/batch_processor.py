@@ -8,21 +8,22 @@ When an organizer uploads a ZIP file of event photos, this module:
 2. Yields them as (filename, bytes) pairs for the API to save + queue
 """
 
+import io
 import zipfile
-from io import BytesIO
 from typing import Iterator, Tuple
 
 from backend.config import ALLOWED_IMAGE_EXTENSIONS
 
 
-def extract_images_from_zip(zip_path: str):
+def extract_images_from_zip(zip_file_or_path):
     """
-    Extracts all image files from a ZIP archive on disk.
+    Extracts all image files from a ZIP archive.
 
     Called by: M1 API Gateway (when organizer uploads a ZIP file)
+    Also called by: unit tests (which pass raw bytes)
 
     Args:
-        zip_path: Path to the temporary ZIP file.
+        zip_file_or_path: Path to the ZIP file (str) OR raw ZIP bytes / file-like object.
 
     Yields:
         (filename, file_like_object) tuples for each supported image found.
@@ -31,15 +32,23 @@ def extract_images_from_zip(zip_path: str):
         ValueError: If the file is not a valid ZIP archive.
         ValueError: If the ZIP contains no supported images.
     """
-    if not zipfile.is_zipfile(zip_path):
+    if isinstance(zip_file_or_path, bytes):
+        zip_file_or_path = io.BytesIO(zip_file_or_path)
+
+    if not zipfile.is_zipfile(zip_file_or_path):
         raise ValueError("Uploaded file is not a valid ZIP archive.")
 
     found_count = 0
 
-    with zipfile.ZipFile(zip_path, "r") as zf:
+    with zipfile.ZipFile(zip_file_or_path, "r") as zf:
         for name in zf.namelist():
-            # Skip directories and hidden files (macOS __MACOSX artifacts, etc.)
-            if name.endswith("/") or name.startswith("__MACOSX") or name.startswith("."):
+            # Skip directories
+            if name.endswith("/"):
+                continue
+
+            # Skip hidden files and macOS meta artifacts anywhere in the path
+            parts = name.split('/')
+            if any(p.startswith('.') or p == '__MACOSX' for p in parts):
                 continue
 
             suffix = "." + name.rsplit(".", 1)[-1].lower() if "." in name else ""
@@ -47,8 +56,6 @@ def extract_images_from_zip(zip_path: str):
                 continue
 
             # We yield an open file object for the image inside the zip
-            # Since ZipExtFile doesn't support tell/seek perfectly and can be slow,
-            # yielding it directly is fine for shutil.copyfileobj
             image_file = zf.open(name)
             filename = name.split("/")[-1]   # strip any subdirectory path
             yield filename, image_file
