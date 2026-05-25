@@ -8,7 +8,7 @@ export const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 /* ── Generic fetch helper ─────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('organizer_token');
+  const token = sessionStorage.getItem('organizer_token');
   if (token) {
     options.headers = {
       ...options.headers,
@@ -94,7 +94,7 @@ export async function uploadPhotos(eventId, files, onProgress) {
     const xhr = new XMLHttpRequest();
     
     // Add JWT Token
-    const token = localStorage.getItem('organizer_token');
+    const token = sessionStorage.getItem('organizer_token');
     
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && onProgress) {
