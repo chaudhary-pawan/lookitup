@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    watch: {
+      usePolling: true,
+    },
     proxy: {
       // Proxy /api and /health calls to FastAPI backend in dev
       '/api': {
