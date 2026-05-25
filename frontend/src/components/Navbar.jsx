@@ -71,11 +71,11 @@ export default function Navbar() {
             </Link>
 
             {/* Logout Button (if token exists) */}
-            {localStorage.getItem('organizer_token') && (
+            {sessionStorage.getItem('organizer_token') && (
               <button
                 className="btn btn-sm btn-ghost"
                 onClick={() => {
-                  localStorage.removeItem('organizer_token');
+                  sessionStorage.removeItem('organizer_token');
                   navigate('/auth');
                 }}
               >
