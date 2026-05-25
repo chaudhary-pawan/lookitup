@@ -6,6 +6,9 @@ from fastapi import HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key-change-in-prod")
+if os.getenv("ENV") == "production" and SECRET_KEY == "super-secret-key-change-in-prod":
+    raise ValueError("Insecure JWT_SECRET in production environment! Set JWT_SECRET environment variable.")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
