@@ -7,13 +7,15 @@ from backend.database.db import get_db
 from backend.database.models import Organizer
 from backend.api.auth import get_password_hash, verify_password, create_access_token, get_current_organizer_id
 
+from backend.api.rate_limit import rate_limiter
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 class AuthRequest(BaseModel):
     email: str
     password: str
 
-@router.post("/register")
+@router.post("/register", dependencies=[Depends(rate_limiter(limit=5, window=60))])
 async def register(req: AuthRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Organizer).where(Organizer.email == req.email))
     existing = result.scalars().first()
@@ -31,7 +33,7 @@ async def register(req: AuthRequest, db: AsyncSession = Depends(get_db)):
     token = create_access_token({"sub": org.id})
     return {"access_token": token, "token_type": "bearer"}
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(rate_limiter(limit=5, window=60))])
 async def login(req: AuthRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Organizer).where(Organizer.email == req.email))
     org = result.scalars().first()
