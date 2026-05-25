@@ -8,6 +8,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [animating, setAnimating] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -21,13 +22,13 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         const data = await loginOrganizer(email, password);
-        localStorage.setItem('organizer_token', data.access_token);
+        sessionStorage.setItem('organizer_token', data.access_token);
         toast.success('Logged in successfully');
         navigate('/organizer');
       } else {
         await registerOrganizer(email, password);
         toast.success('Registration successful. Please log in.');
-        setIsLogin(true);
+        handleToggleMode();
       }
     } catch (err) {
       toast.error(err.message || 'Authentication failed');
@@ -36,58 +37,90 @@ export default function AuthPage() {
     }
   };
 
+  const handleToggleMode = () => {
+    setAnimating(true);
+    setTimeout(() => {
+      setIsLogin((prev) => !prev);
+      setAnimating(false);
+    }, 150);
+  };
+
   return (
-    <div className="page-enter" style={{ padding: '40px 24px 60px' }}>
-      <div className="container" style={{ maxWidth: 400 }}>
+    <div className="page-enter" style={{ padding: '60px 24px 80px' }}>
+      <div className="container" style={{ maxWidth: 420 }}>
         
-        <div className="text-center mb-6">
-          <h1 style={{ fontSize: 'clamp(1.75rem, 4vw, 2.75rem)', fontWeight: 900 }}>
-            <span className="gradient-text">{isLogin ? 'Welcome Back' : 'Create Account'}</span>
-          </h1>
-          <p className="text-muted mt-2">
-            {isLogin ? 'Sign in to manage your events' : 'Sign up to create new events'}
-          </p>
-        </div>
+        <div className="auth-card">
+          <div className="auth-icon-wrap" style={{ transform: animating ? 'scale(0.8) rotate(-45deg)' : 'none' }}>
+            {isLogin ? '🔒' : '👤'}
+          </div>
 
-        <div className="glow-card">
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Email</label>
-              <input
-                type="email"
-                className="input-field"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-              />
+          <div className={`form-transition ${animating ? 'animating' : ''}`}>
+            <div className="text-center mb-6">
+              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                {isLogin ? 'Welcome Back' : 'Create Account'}
+              </h1>
+              <p className="text-muted mt-2" style={{ fontSize: '0.875rem' }}>
+                {isLogin ? 'Sign in to manage your events' : 'Sign up to create new events'}
+              </p>
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Password</label>
-              <input
-                type="password"
-                className="input-field"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', marginTop: '8px' }}>
-              {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up'}
-            </button>
-          </form>
 
-          <div style={{ marginTop: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <button 
-              onClick={() => setIsLogin(!isLogin)}
-              style={{ background: 'none', border: 'none', color: 'var(--violet-light)', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-            >
-              {isLogin ? 'Sign Up' : 'Sign In'}
-            </button>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: 500 }}>
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  className="input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: 500 }}>
+                  Password
+                </label>
+                <input
+                  type="password"
+                  className="input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+              <button 
+                type="submit" 
+                className="btn btn-primary-interactive" 
+                disabled={loading} 
+                style={{ padding: '12px 24px', fontWeight: 600 }}
+              >
+                {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up'}
+              </button>
+            </form>
+
+            <div style={{ marginTop: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              {isLogin ? "Don't have an account? " : "Already have an account? "}
+              <button 
+                onClick={handleToggleMode}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: 'var(--violet-light)', 
+                  cursor: 'pointer', 
+                  fontWeight: 500,
+                  textDecoration: 'underline', 
+                  padding: 0 
+                }}
+              >
+                {isLogin ? 'Sign Up' : 'Sign In'}
+              </button>
+            </div>
           </div>
         </div>
+
       </div>
     </div>
   );
