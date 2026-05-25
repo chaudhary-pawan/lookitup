@@ -12,7 +12,7 @@ import AuthPage from './pages/AuthPage';
 
 // A simple component to protect the organizer route
 function ProtectedRoute({ children }) {
-  const token = localStorage.getItem('organizer_token');
+  const token = sessionStorage.getItem('organizer_token');
   if (!token) {
     return <Navigate to="/auth" replace />;
   }
