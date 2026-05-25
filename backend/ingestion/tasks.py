@@ -41,19 +41,18 @@ def process_album_task(
     Args:
         event_id: The event to process.
         photos:   List of {"photo_id": ..., "storage_key": ...} dicts
-                  (passed as JSON-serializable dict — no ORM objects in tasks)
 
     Returns:
         Summary dict: {processed: int, skipped: int, total_faces: int}
-
-    Workflow:
-        For each photo:
-          1. IngestionPipeline.process_single_photo() → face detection + FAISS
-          2. Mark photo as processed in DB
-        After all photos:
-          3. IngestionPipeline.finalize_event() → save FAISS index to disk
-          4. Mark event as "ready" in DB
     """
+    return asyncio.run(_process_album_async(self, event_id, photos))
+
+
+async def _process_album_async(
+    self,
+    event_id: str,
+    photos: List[Dict],
+) -> Dict:
     # Import here to avoid circular imports at module load time
     from backend.database.db import AsyncSessionLocal
     from backend.database import crud
@@ -65,34 +64,41 @@ def process_album_task(
 
     logger.info(f"Starting album processing: event={event_id}, photos={len(photos)}")
 
-    for photo_data in photos:
-        photo_id = photo_data["photo_id"]
-        storage_key = photo_data["storage_key"]
+    async with AsyncSessionLocal() as db:
+        for photo_data in photos:
+            photo_id = photo_data["photo_id"]
+            storage_key = photo_data["storage_key"]
 
+            try:
+                face_count, thumbnail_key, embeddings = await IngestionPipeline.process_single_photo(
+                    photo_id=photo_id,
+                    storage_key=storage_key,
+                    event_id=event_id,
+                )
+
+                # Update DB asynchronously in the open session
+                await crud.mark_photo_processed_with_faces(
+                    db,
+                    photo_id=photo_id,
+                    face_count=face_count,
+                    thumbnail_key=thumbnail_key,
+                    embeddings=embeddings
+                )
+                processed_count += 1
+                total_faces += face_count
+
+            except Exception as exc:
+                logger.error(f"Failed to process photo {photo_id}: {exc}", exc_info=True)
+                skipped_count += 1
+                # Don't re-raise — one bad photo shouldn't abort the whole album
+                continue
+
+        # Mark event ready
         try:
-            face_count, thumbnail_key, embedding = IngestionPipeline.process_single_photo(
-                photo_id=photo_id,
-                storage_key=storage_key,
-                event_id=event_id,
-            )
-
-            # Update DB synchronously using asyncio.run (we're in a sync Celery worker)
-            asyncio.run(_mark_processed(photo_id, face_count, thumbnail_key, embedding))
-            processed_count += 1
-            total_faces += face_count
-
+            await crud.set_event_status(db, event_id, EventStatus.ready)
         except Exception as exc:
-            logger.error(f"Failed to process photo {photo_id}: {exc}", exc_info=True)
-            skipped_count += 1
-            # Don't re-raise — one bad photo shouldn't abort the whole album
-            continue
-
-    # Mark event ready
-    try:
-        asyncio.run(_mark_event_ready(event_id))
-    except Exception as exc:
-        logger.error(f"Failed to finalize event {event_id}: {exc}", exc_info=True)
-        raise self.retry(exc=exc)
+            logger.error(f"Failed to finalize event {event_id}: {exc}", exc_info=True)
+            raise self.retry(exc=exc)
 
     summary = {
         "event_id": event_id,
@@ -102,20 +108,3 @@ def process_album_task(
     }
     logger.info(f"Album processing complete: {summary}")
     return summary
-
-
-# ── Async helpers (run inside sync Celery worker via asyncio.run) ──────────────
-
-async def _mark_processed(photo_id: str, face_count: int, thumbnail_key: str, embedding: list) -> None:
-    from backend.database.db import AsyncSessionLocal
-    from backend.database import crud
-    async with AsyncSessionLocal() as db:
-        await crud.mark_photo_processed(db, photo_id, face_count, thumbnail_key=thumbnail_key, embedding=embedding)
-
-
-async def _mark_event_ready(event_id: str) -> None:
-    from backend.database.db import AsyncSessionLocal
-    from backend.database import crud
-    from backend.database.models import EventStatus
-    async with AsyncSessionLocal() as db:
-        await crud.set_event_status(db, event_id, EventStatus.ready)
