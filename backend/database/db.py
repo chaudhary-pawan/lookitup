@@ -53,6 +53,9 @@ AsyncSessionLocal = async_sessionmaker(
 async def init_db() -> None:
     """Creates all tables. Called once at application startup."""
     async with engine.begin() as conn:
+        if "postgresql" in str(conn.engine.url):
+            import sqlalchemy as sa
+            await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector;"))
         await conn.run_sync(Base.metadata.create_all)
 
 
