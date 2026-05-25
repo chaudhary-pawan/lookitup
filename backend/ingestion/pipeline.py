@@ -25,23 +25,24 @@ from PIL import Image
 
 from backend.storage import StorageService
 from backend.face_engine import FaceEngine
+from backend.face_engine.models import FaceEmbedding
 
 logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
     """
-    Synchronous pipeline that processes one photo at a time.
+    Asynchronous pipeline that processes one photo at a time.
 
-    Designed to run inside a Celery worker (sync context).
-    Uses synchronous StorageService.get_photo_bytes() — no asyncio needed here.
+    Designed to run inside a Celery worker async task context.
     """
 
-    def process_single_photo(
+    @staticmethod
+    async def process_single_photo(
         photo_id: str,
         storage_key: str,
         event_id: str,
-    ) -> Tuple[int, str, Optional[list]]:
+    ) -> Tuple[int, str, List[FaceEmbedding]]:
         """
         Processes one photo: generate thumbnail → detect faces → extract embedding.
 
@@ -51,7 +52,7 @@ class IngestionPipeline:
             event_id:    Which event this photo belongs to.
 
         Returns:
-            Tuple of (face_count, thumbnail_key, first_face_embedding)
+            Tuple of (face_count, thumbnail_key, face_embeddings)
 
         Note:
             DB updates (mark_photo_processed) are done in tasks.py
@@ -72,22 +73,17 @@ class IngestionPipeline:
             img.save(thumb_io, format="WEBP", quality=80)
             thumb_bytes = thumb_io.getvalue()
         
-        # Save thumbnail synchronously using asyncio.run since we are in a sync pipeline method
-        # Wait, StorageService.save_photo is async.
-        # But we are in a sync function. We must use asyncio.run to call it.
-        import asyncio
         thumb_filename = f"thumb_{photo_id}.webp"
-        thumbnail_key = asyncio.run(StorageService.save_photo(thumb_bytes, event_id, thumb_filename))
+        thumbnail_key = await StorageService.save_photo(thumb_bytes, event_id, thumb_filename)
 
         # Step 2: Detect all faces + extract embeddings (M5)
         face_embeddings = FaceEngine.detect_and_embed(photo_bytes)
         face_count = len(face_embeddings)
-        first_embedding = face_embeddings[0].vector.tolist() if face_count > 0 else None
 
         if face_count == 0:
             logger.info(f"No faces found in photo {photo_id} — skipping index update")
-            return 0, thumbnail_key, None
+            return 0, thumbnail_key, []
 
         logger.info(f"Found {face_count} face(s) in photo {photo_id}")
 
-        return face_count, thumbnail_key, first_embedding
+        return face_count, thumbnail_key, face_embeddings
