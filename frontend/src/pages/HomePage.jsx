@@ -15,21 +15,21 @@ const HOW_IT_WORKS = [
     title: 'Organizer creates event',
     desc: 'Upload hundreds of photos from your event — JPEGs or a bulk ZIP file.',
     icon: '📸',
-    color: 'var(--violet)',
+    color: 'var(--accent)',
   },
   {
     step: '02',
     title: 'AI processes every face',
     desc: 'InsightFace detects and embeds every face into a fast FAISS vector index.',
     icon: '🧠',
-    color: 'var(--pink)',
+    color: 'var(--accent)',
   },
   {
     step: '03',
     title: 'Attendees find their photos',
     desc: 'Share a link. Attendees upload a selfie and instantly see every photo they\'re in.',
     icon: '🔍',
-    color: 'var(--cyan)',
+    color: 'var(--accent)',
   },
 ];
 
@@ -61,8 +61,8 @@ export default function HomePage() {
           AI-Powered · Face Recognition · Private by Design
         </div>
 
-        <h1>
-          Find <span className="gradient-text">Your Photos</span>
+        <h1 style={{ fontWeight: 800 }}>
+          Find Your Photos
           <br />From Any Event
         </h1>
 
@@ -135,9 +135,9 @@ export default function HomePage() {
             <div key={item.step} className="glow-card" style={{ position: 'relative', overflow: 'hidden' }}>
               <div style={{
                 position: 'absolute', top: 16, right: 20,
-                fontSize: '3.5rem', fontWeight: 900, opacity: 0.06,
-                fontFamily: "'Space Grotesk', sans-serif",
-                color: item.color,
+                fontSize: '3.5rem', fontWeight: 900, opacity: 0.2,
+                fontFamily: "'Inter', sans-serif",
+                color: 'var(--text-secondary)',
               }}>
                 {item.step}
               </div>
@@ -159,14 +159,10 @@ export default function HomePage() {
         </div>
 
         {/* CTA Banner */}
-        <div style={{
+        <div className="glow-card" style={{
           marginTop: 48,
           padding: '40px',
-          borderRadius: 'var(--radius-xl)',
-          background: 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(236,72,153,0.15) 100%)',
-          border: '1px solid rgba(139,92,246,0.25)',
           textAlign: 'center',
-          backdropFilter: 'blur(20px)',
         }}>
           <h2 style={{ fontSize: '1.75rem', marginBottom: '12px' }}>
             Ready to get started?
