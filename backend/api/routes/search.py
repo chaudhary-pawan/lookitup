@@ -24,12 +24,13 @@ from backend.database.models import EventStatus
 from backend.face_engine import FaceEngine, NoFaceDetectedError, MultipleFacesError
 from backend.config import SIMILARITY_CONFIDENT
 from backend.storage import StorageService
+from backend.api.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/api/events", tags=["search"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/{share_token}/search")
+@router.post("/{share_token}/search", dependencies=[Depends(rate_limiter(limit=10, window=60))])
 async def search_photos(
     share_token: str,
     selfie: UploadFile = File(..., description="Selfie photo — must contain exactly one face"),
