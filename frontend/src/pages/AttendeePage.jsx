@@ -29,8 +29,7 @@ function Lightbox({ url, onClose }) {
 }
 
 /* ── Photo Card ───────────────────────────────────────────────────────── */
-function PhotoCard({ photo, tier, index, onOpen }) {
-  const isConfident = tier === 'confident';
+function PhotoCard({ photo, index, onOpen }) {
   const scorePercent = Math.round(photo.score * 100);
 
   const handleDownload = async (e) => {
@@ -63,12 +62,6 @@ function PhotoCard({ photo, tier, index, onOpen }) {
         <div className="photo-card-score">{scorePercent}% match</div>
       </div>
 
-      <div className="photo-card-tier">
-        <span className={`badge ${isConfident ? 'badge-green' : 'badge-amber'}`}>
-          {isConfident ? '✓ Confident' : '~ Possible'}
-        </span>
-      </div>
-
       <button
         className="photo-download-btn"
         onClick={handleDownload}
@@ -81,64 +74,174 @@ function PhotoCard({ photo, tier, index, onOpen }) {
   );
 }
 
-/* ── Selfie Drop Zone ─────────────────────────────────────────────────── */
-function SelfieDropZone({ onFile, selfiePreview, onClear }) {
-  const [dragging, setDragging] = useState(false);
-  const inputRef = useRef(null);
+/* ── Selfie Camera Zone (Privacy Enforced Live Capture) ──────────────── */
+function SelfieCameraZone({ onCapture, selfiePreview, onClear }) {
+  const [active, setActive] = useState(false);
+  const [error, setError] = useState(null);
+  const [stream, setStream] = useState(null);
+  const videoRef = useRef(null);
 
-  const handleFile = useCallback((file) => {
-    if (!file) return;
-    if (!/\.(jpe?g|png|webp)$/i.test(file.name)) {
-      toast.error('Please upload a JPEG, PNG, or WebP image');
-      return;
+  const startCamera = async () => {
+    setError(null);
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      setStream(mediaStream);
+      setActive(true);
+      // Wait for React to render the video element, then attach stream
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      }, 50);
+    } catch (err) {
+      console.error(err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Camera permission denied. Please allow camera access in your browser settings to continue.');
+      } else {
+        setError('Could not access camera. Please make sure your camera is connected and not in use by another app.');
+      }
     }
-    onFile(file);
-  }, [onFile]);
+  };
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setDragging(false);
-    handleFile(e.dataTransfer.files[0]);
-  }, [handleFile]);
+  const stopCamera = useCallback(() => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
+    }
+    setActive(false);
+  }, [stream]);
+
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [stream]);
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    
+    const ctx = canvas.getContext('2d');
+    // Mirror the canvas image to match user-facing preview
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
+        onCapture(file);
+        stopCamera();
+      }
+    }, 'image/jpeg', 0.95);
+  };
 
   if (selfiePreview) {
     return (
-      <div style={{ textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', padding: '12px 0' }}>
         <div className="selfie-preview">
-          <img src={selfiePreview} alt="Your selfie preview" />
+          <img src={selfiePreview} alt="Your live selfie preview" style={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border-active)' }} />
           <button className="selfie-remove" onClick={onClear} aria-label="Remove selfie">✕</button>
         </div>
-        <p className="text-muted text-sm mt-3">Selfie ready — click Search below</p>
+        <p className="text-muted text-sm mt-3">Live selfie captured successfully!</p>
+      </div>
+    );
+  }
+
+  if (active) {
+    return (
+      <div className="flex flex-col items-center gap-4 w-full" style={{ padding: '10px 0' }}>
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '400px',
+          aspectRatio: '4/3',
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          background: '#000',
+          border: '1px solid var(--border-glass)',
+        }}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transform: 'scaleX(-1)', // Mirror user preview
+            }}
+          />
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <div style={{
+              width: '180px',
+              height: '220px',
+              borderRadius: '50%',
+              border: '2px dashed rgba(255, 255, 255, 0.5)',
+              boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
+            }} />
+          </div>
+        </div>
+        <p className="text-muted text-xs">Center your face inside the guide</p>
+        <div className="flex gap-2">
+          <button className="btn btn-ghost btn-sm" onClick={stopCamera}>
+            Cancel
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={capturePhoto}>
+            📸 Snap Photo
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      id="selfie-drop-zone"
-      className={`drop-zone ${dragging ? 'dragging' : ''}`}
-      onDrop={handleDrop}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
-      onClick={() => inputRef.current?.click()}
-      style={{ padding: '36px 24px' }}
+      className="drop-zone"
+      onClick={startCamera}
+      style={{ padding: '36px 24px', cursor: 'pointer' }}
     >
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp"
-        onChange={(e) => handleFile(e.target.files[0])}
-        style={{ display: 'none' }}
-        id="selfie-file-input"
-      />
-      <span className="drop-zone-icon">{dragging ? '🤳' : '🤳'}</span>
-      <h3>Upload Your Selfie</h3>
+      <span className="drop-zone-icon">📸</span>
+      <h3>Take Live Selfie</h3>
       <p>
-        Drop a selfie here, or click to browse<br />
+        Click to open camera and snap a photo<br />
         <span style={{ color: 'var(--violet-light)', fontSize: '0.8125rem' }}>
-          Make sure only your face is visible
+          Live capture only. File uploads are disabled for privacy.
         </span>
       </p>
+      {error && (
+        <div style={{
+          color: 'var(--rose)',
+          fontSize: '0.85rem',
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          padding: '8px 12px',
+          borderRadius: 'var(--radius-sm)',
+          maxWidth: '440px',
+          marginTop: '16px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+        }}>
+          ⚠️ {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -207,24 +310,25 @@ export default function AttendeePage() {
     }
   };
 
+  const allMatches = results
+    ? [...(results.confident || []), ...(results.possible || [])].sort((a, b) => b.score - a.score)
+    : [];
+
   /* ── Download all ────────────────────────────────────────────────── */
   const downloadAll = async () => {
-    if (!results) return;
-    const all = [...(results.confident || []), ...(results.possible || [])];
+    if (allMatches.length === 0) return;
     toast('Starting downloads…', { icon: '⬇️' });
-    for (let i = 0; i < all.length; i++) {
+    for (let i = 0; i < allMatches.length; i++) {
       await new Promise((r) => setTimeout(r, 300 * i));
       const a = document.createElement('a');
-      a.href = `${BASE}${all[i].url}`;
+      a.href = `${BASE}${allMatches[i].url}`;
       a.download = `lookitup-${i + 1}.jpg`;
       a.target = '_blank';
       a.click();
     }
   };
 
-  const totalResults = results
-    ? (results.confident?.length || 0) + (results.possible?.length || 0)
-    : 0;
+  const totalResults = allMatches.length;
 
   /* ── Render ──────────────────────────────────────────────────────── */
   return (
@@ -240,14 +344,14 @@ export default function AttendeePage() {
             Find <span className="gradient-text">Your Photos</span>
           </h1>
           <p className="text-muted mt-2" style={{ fontSize: '1rem', lineHeight: 1.6 }}>
-            Upload a selfie and we'll instantly find every photo from this event where you appear.
+            Take a live selfie and we'll instantly find every photo from this event where you appear.
           </p>
         </div>
 
         {/* Search Card */}
         <div className="glow-card mb-6">
-          <SelfieDropZone
-            onFile={handleSelfieFile}
+          <SelfieCameraZone
+            onCapture={handleSelfieFile}
             selfiePreview={selfiePreview}
             onClear={clearSelfie}
           />
@@ -255,7 +359,7 @@ export default function AttendeePage() {
           {selfieFile && (
             <div style={{ marginTop: '20px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button className="btn btn-ghost" onClick={clearSelfie} disabled={searching}>
-                🔄 Change Selfie
+                🔄 Retake Selfie
               </button>
               <button
                 id="search-btn"
@@ -272,11 +376,11 @@ export default function AttendeePage() {
 
           {/* Tips */}
           {!selfieFile && (
-            <div style={{ marginTop: '20px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+            <div style={{ marginTop: '20px', display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {[
                 { icon: '💡', text: 'Use a clear, well-lit selfie' },
                 { icon: '👤', text: 'Only your face in the photo' },
-                { icon: '📱', text: 'JPEG, PNG or WebP accepted' },
+                { icon: '🔒', text: 'Live capture ensures privacy' },
               ].map((tip) => (
                 <div key={tip.text} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                   <span>{tip.icon}</span>
@@ -297,11 +401,6 @@ export default function AttendeePage() {
                     ? `Found ${totalResults} photo${totalResults > 1 ? 's' : ''} 🎉`
                     : 'No photos found'}
                 </h2>
-                {totalResults > 0 && (
-                  <p className="text-muted text-sm mt-1">
-                    {results.confident?.length || 0} confident · {results.possible?.length || 0} possible matches
-                  </p>
-                )}
               </div>
               {totalResults > 0 && (
                 <button
@@ -328,52 +427,17 @@ export default function AttendeePage() {
               </div>
             )}
 
-            {/* Confident results */}
-            {results.confident?.length > 0 && (
-              <>
-                <div className="section-divider">
-                  <span className="badge badge-green">✓ Confident Matches</span>
-                  <div className="section-divider-line" />
-                  <span className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
-                    {results.confident.length} photo{results.confident.length > 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="photo-grid">
-                  {results.confident.map((photo, i) => (
-                    <PhotoCard
-                      key={photo.photo_id}
-                      photo={photo}
-                      tier="confident"
-                      index={i}
-                      onOpen={setLightboxUrl}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Possible results */}
-            {results.possible?.length > 0 && (
-              <>
-                <div className="section-divider" style={{ marginTop: 32 }}>
-                  <span className="badge badge-amber">~ Possible Matches</span>
-                  <div className="section-divider-line" />
-                  <span className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
-                    {results.possible.length} photo{results.possible.length > 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="photo-grid">
-                  {results.possible.map((photo, i) => (
-                    <PhotoCard
-                      key={photo.photo_id}
-                      photo={photo}
-                      tier="possible"
-                      index={i}
-                      onOpen={setLightboxUrl}
-                    />
-                  ))}
-                </div>
-              </>
+            {totalResults > 0 && (
+              <div className="photo-grid mt-4">
+                {allMatches.map((photo, i) => (
+                  <PhotoCard
+                    key={photo.photo_id}
+                    photo={photo}
+                    index={i}
+                    onOpen={setLightboxUrl}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
