@@ -16,7 +16,6 @@ from httpx import AsyncClient
 from backend.database import crud
 from backend.database.models import EventStatus
 from backend.face_engine.exceptions import NoFaceDetectedError, MultipleFacesError
-from backend.vector_index.models import SearchResult
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -41,13 +40,13 @@ class TestSearchPhotos:
         photo = await crud.record_photo(async_db, event.id, "e/1.jpg")
 
         mock_results = [
-            SearchResult(photo_id=photo.id, similarity=0.92, tier="confident")
+            (photo, 0.92)
         ]
 
         with (
             patch("backend.face_engine.FaceEngine.embed_single",
                   return_value=_make_embedding()),
-            patch("backend.vector_index.VectorIndex.search",
+            patch("backend.database.crud.search_photos_by_embedding",
                   return_value=mock_results),
             patch("backend.storage.StorageService.get_photo_url",
                   return_value="/api/photos/e/1.jpg"),
@@ -71,7 +70,7 @@ class TestSearchPhotos:
         with (
             patch("backend.face_engine.FaceEngine.embed_single",
                   return_value=_make_embedding()),
-            patch("backend.vector_index.VectorIndex.search", return_value=[]),
+            patch("backend.database.crud.search_photos_by_embedding", return_value=[]),
         ):
             resp = await test_client.post(
                 f"/api/events/{event.share_token}/search",
@@ -144,14 +143,14 @@ class TestSearchPhotos:
         p2 = await crud.record_photo(async_db, event.id, "e/2.jpg")
 
         mock_results = [
-            SearchResult(photo_id=p1.id, similarity=0.88, tier="confident"),
-            SearchResult(photo_id=p2.id, similarity=0.61, tier="possible"),
+            (p1, 0.88),
+            (p2, 0.61),
         ]
 
         with (
             patch("backend.face_engine.FaceEngine.embed_single",
                   return_value=_make_embedding()),
-            patch("backend.vector_index.VectorIndex.search",
+            patch("backend.database.crud.search_photos_by_embedding",
                   return_value=mock_results),
             patch("backend.storage.StorageService.get_photo_url",
                   return_value="/api/photos/e/1.jpg"),
@@ -172,21 +171,3 @@ class TestSearchPhotos:
         await crud.set_event_status(async_db, event.id, EventStatus.ready)
         resp = await test_client.post(f"/api/events/{event.share_token}/search")
         assert resp.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_faiss_index_not_found_returns_503(self, test_client: AsyncClient, async_db):
-        event = await crud.create_event(async_db, "E")
-        await crud.set_event_status(async_db, event.id, EventStatus.ready)
-
-        with (
-            patch("backend.face_engine.FaceEngine.embed_single",
-                  return_value=_make_embedding()),
-            patch("backend.vector_index.VectorIndex.search",
-                  side_effect=FileNotFoundError("No index")),
-        ):
-            resp = await test_client.post(
-                f"/api/events/{event.share_token}/search",
-                files=[("selfie", ("me.jpg", FAKE_JPEG, "image/jpeg"))],
-            )
-
-        assert resp.status_code == 503
