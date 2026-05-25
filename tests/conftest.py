@@ -33,6 +33,7 @@ _TEMP_FAISS  = tempfile.mkdtemp(prefix="lookitup_faiss_")
 cfg.LOCAL_UPLOAD_DIR = Path(_TEMP_UPLOAD)
 cfg.FAISS_INDEX_DIR  = Path(_TEMP_FAISS)
 cfg.DATABASE_URL     = "sqlite+aiosqlite:///:memory:"
+cfg.STORAGE_BACKEND  = "local"
 
 from backend.database.models import Base
 from backend.database.db import get_db
@@ -62,6 +63,10 @@ async def async_db() -> AsyncGenerator[AsyncSession, None]:
         await conn.run_sync(Base.metadata.create_all)
 
     async with TestSessionLocal() as session:
+        from backend.database.models import Organizer
+        org = Organizer(id="test-organizer-id", email="test@example.com", hashed_password="mock")
+        session.add(org)
+        await session.commit()
         yield session
 
 
@@ -72,11 +77,16 @@ async def test_client(async_db: AsyncSession) -> AsyncGenerator[AsyncClient, Non
     with the DB dependency overridden to use the test session.
     """
     from backend.api.main import app
+    from backend.api.auth import get_current_organizer_id
 
     async def override_get_db():
         yield async_db
 
+    async def override_get_current_organizer_id():
+        return "test-organizer-id"
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_organizer_id] = override_get_current_organizer_id
 
     # Bypass lifespan (face model loading) for API integration tests
     transport = ASGITransport(app=app)
