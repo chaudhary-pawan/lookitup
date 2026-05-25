@@ -48,7 +48,7 @@ class TestExtractImagesFromZip:
         assert len(results) == 1
         name, content = results[0]
         assert name == "photo.jpg"
-        assert content == FAKE_JPEG
+        assert content.read() == FAKE_JPEG
 
     def test_extracts_multiple_images(self):
         zip_bytes = _make_zip({
@@ -186,4 +186,4 @@ class TestZipEdgeCases:
         zip_bytes = _make_zip({"empty.jpg": b""})
         results = list(extract_images_from_zip(zip_bytes))
         assert len(results) == 1
-        assert results[0][1] == b""
+        assert results[0][1].read() == b""
