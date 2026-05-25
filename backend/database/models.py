@@ -12,7 +12,7 @@ Uses SQLAlchemy ORM with async support.
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, Enum, ForeignKey
+    Column, String, Integer, Boolean, DateTime, Enum, ForeignKey, Float, Index
 )
 from sqlalchemy.orm import declarative_base, relationship
 from pgvector.sqlalchemy import Vector
@@ -90,12 +90,37 @@ class Photo(Base):
     face_count  = Column(Integer, nullable=True)          # None until processed
     processed   = Column(Boolean, default=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
-    
-    # ── M6 Vector Embedding directly in DB (using pgvector) ──
-    # InsightFace defaults to 512-dimensional embeddings
-    embedding   = Column(Vector(512), nullable=True)
 
     event = relationship("Event", back_populates="photos")
+    faces = relationship("PhotoFace", back_populates="photo", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Photo id={self.id!r} event={self.event_id!r} processed={self.processed!r}>"
+
+
+class PhotoFace(Base):
+    """
+    Represents a single face detected within a Photo.
+    Allows one photo to contain multiple searchable faces.
+    """
+    __tablename__ = "photo_faces"
+
+    id         = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    photo_id   = Column(String(36), ForeignKey("photos.id", ondelete="CASCADE"), nullable=False, index=True)
+    bbox       = Column(String(64), nullable=True)  # Bounding box coordinates [x1, y1, x2, y2]
+    embedding  = Column(Vector(512), nullable=False)
+    confidence = Column(Float, nullable=True)
+
+    photo = relationship("Photo", back_populates="faces")
+
+    __table_args__ = (
+        Index(
+            "photo_faces_embedding_idx",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+
+    def __repr__(self):
+        return f"<PhotoFace id={self.id!r} photo={self.photo_id!r}>"
