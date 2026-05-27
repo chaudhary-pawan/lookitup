@@ -48,11 +48,56 @@ class CloudinaryStorage:
     ) -> str:
         """Uploads photo to Cloudinary, returns public_id as storage_key."""
         import uuid
+        import io
+        from PIL import Image
+        import logging
+
+        logger = logging.getLogger(__name__)
         photo_id = str(uuid.uuid4())
         public_id = f"lookitup/{event_id}/{photo_id}"
 
-        # If it's bytes, wrap it in BytesIO. If it's a file, pass it directly.
-        upload_target = BytesIO(photo_data) if isinstance(photo_data, bytes) else photo_data
+        # Get bytes from input
+        if isinstance(photo_data, bytes):
+            img_bytes = photo_data
+        else:
+            # File-like object (e.g., SpooledTemporaryFile or UploadFile.file)
+            photo_data.seek(0)
+            img_bytes = photo_data.read()
+            photo_data.seek(0)
+
+        # Cloudinary free tier limit is 10MB. Proactively compress if close (>9.5MB)
+        MAX_SIZE_BYTES = 9.5 * 1024 * 1024
+        if len(img_bytes) > MAX_SIZE_BYTES:
+            logger.info(f"Image {original_filename} ({len(img_bytes)} bytes) exceeds Cloudinary free limit. Compressing...")
+            try:
+                img = Image.open(io.BytesIO(img_bytes))
+                
+                # Downscale if extremely large (e.g., > 2048px on the longest side)
+                max_dim = 2048
+                width, height = img.size
+                if max(width, height) > max_dim:
+                    if width > height:
+                        new_width = max_dim
+                        new_height = int(height * (max_dim / width))
+                    else:
+                        new_height = max_dim
+                        new_width = int(width * (max_dim / height))
+                    
+                    resample_filter = getattr(Image, 'Resampling', Image).LANCZOS
+                    img = img.resize((new_width, new_height), resample_filter)
+                    logger.info(f"Resized image from {width}x{height} to {new_width}x{new_height}")
+
+                # Save as JPEG with compression
+                output = io.BytesIO()
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(output, format="JPEG", quality=85, optimize=True)
+                img_bytes = output.getvalue()
+                logger.info(f"Compression finished. New size: {len(img_bytes)} bytes.")
+            except Exception as e:
+                logger.warning(f"Failed to compress image {original_filename}: {e}. Uploading original.")
+
+        upload_target = io.BytesIO(img_bytes)
 
         result = cloudinary.uploader.upload(
             upload_target,
