@@ -1,8 +1,8 @@
-# LookItUp — How I'd Explain This Project
+# LookItUp
 
 ---
 
-## What problem were you solving?
+## What problem was i solving?
 
 So this came from something I noticed at events — weddings, college fests, corporate meetups. The photographer takes like 500 photos, dumps them in a Google Drive or shared album, and then every attendee has to sit there and scroll through all 500 to find the 5 photos they're actually in. Nobody does that. Most people open the folder, scroll for 2 minutes, get bored, and close it.
 
@@ -12,7 +12,7 @@ I wanted to fix that. The idea behind LookItUp is simple — you upload one self
 
 ---
 
-## Which AI tool did you use?
+## Which AI tool did i use?
 
 I used **InsightFace with the ArcFace model** — it's an open-source deep learning framework that's specifically built for face recognition and is one of the top performers on standard benchmarks (99.83% on LFW).
 
